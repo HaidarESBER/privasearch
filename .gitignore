@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+
+# searxng/settings.yml is tracked with a PLACEHOLDER secret. After running
+# setup it contains a real random secret_key — do not commit that change.
+# If you version this repo, consider: git update-index --skip-worktree searxng/settings.yml
