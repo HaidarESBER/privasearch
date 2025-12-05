@@ -1,0 +1,22 @@
+# SearXNG configuration — hardened for a PRIVATE, local-only instance.
+# Inherit upstream defaults, then override only what matters.
+use_default_settings: true
+
+general:
+  debug: false                 # debug logs can echo queries -> keep OFF
+  instance_name: "PrivaSearch"
+  contact_url: false
+
+server:
+  # Random per-install secret. Replace before any real use.
+  secret_key: "CHANGE_ME_super_secret_placeholder_key_0000000000000000000000000000"
+  base_url: false
+  limiter: false
+  public_instance: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  theme_args:
+    simple_style: dark
