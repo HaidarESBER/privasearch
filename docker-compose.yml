@@ -1,0 +1,30 @@
+# PrivaSearch — privacy-first AI search (SearXNG + Ollama + RAG API + React UI)
+#
+# Networking model (privacy-critical):
+#   - Every service sits on the internal bridge network `privanet`.
+#   - ONLY the frontend publishes a host port. SearXNG, Ollama and the API
+#     have NO `ports:` mapping, so they are unreachable from outside Docker.
+#   - The browser talks only to the frontend; nginx reverse-proxies /api/* to
+#     the API container over the internal network.
+name: privasearch
+
+services:
+
+  # ── Metasearch backend ────────────────────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    container_name: privasearch-searxng
+    volumes:
+      # settings.yml carries all the privacy hardening (see comments in it).
+      - ./searxng:/etc/searxng:rw
+    environment:
+      # Base URL is only used for absolute links; kept local.
+      - SEARXNG_BASE_URL=http://localhost:${FRONTEND_PORT:-8080}/
+      - INSTANCE_NAME=PrivaSearch
+    networks: [privanet]
+    # NO ports published — reachable only by the API container.
+    restart: unless-stopped
+
+networks:
+  privanet:
+    driver: bridge
