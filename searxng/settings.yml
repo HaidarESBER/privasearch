@@ -5,18 +5,50 @@ use_default_settings: true
 general:
   debug: false                 # debug logs can echo queries -> keep OFF
   instance_name: "PrivaSearch"
+  enable_metrics: false        # do not collect/aggregate usage metrics
+  # No donation/contact/about links: this is not a public instance.
   contact_url: false
 
 server:
-  # Random per-install secret. Replace before any real use.
-  secret_key: "CHANGE_ME_super_secret_placeholder_key_0000000000000000000000000000"
+  # Random per-install secret. `make setup` / `npm run setup` replaces the
+  # placeholder below with 32 bytes of crypto-random hex. NEVER ship a real one.
+  secret_key: "7d39e374c21ce57c5ae347b1ca7165bed53da08d923aba6efc490675ff69dade"
   base_url: false
+  # Rate limiter / bot-detection OFF: this instance is only reachable by our
+  # own orchestration container, and the limiter would otherwise block the
+  # programmatic JSON API calls. Safe because the port is never exposed.
   limiter: false
-  public_instance: false
+  public_instance: false       # disables public-instance-only features
+  # Proxy remote images through SearXNG so upstream sites never see your IP.
+  image_proxy: true
   method: "GET"
+
+search:
+  # Enable the JSON API (DISABLED by default upstream). Required by the API
+  # layer to fetch results as structured data instead of scraping HTML.
+  formats:
+    - html
+    - json
+  safe_search: 1               # 0=off, 1=moderate, 2=strict
+  # No autocomplete: prevents per-keystroke queries leaking to upstreams.
+  autocomplete: ""
+  default_lang: "auto"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
 
 ui:
   static_use_hash: true
   default_theme: simple
   theme_args:
     simple_style: dark
+
+outgoing:
+  # Timeouts for upstream engine requests (the ONLY external traffic allowed).
+  request_timeout: 6.0
+  max_request_timeout: 12.0
+  pool_connections: 100
+  pool_maxsize: 20
+
+# Query logging: SearXNG does not persist queries by default. With debug and
+# metrics off, and no Redis/Valkey configured, nothing about a search is
+# written to disk — it lives only in memory for the duration of the request.
