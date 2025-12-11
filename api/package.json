@@ -1,0 +1,16 @@
+{
+  "name": "privasearch-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RAG orchestration layer: SearXNG + Ollama, streamed with citations.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
