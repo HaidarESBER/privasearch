@@ -25,6 +25,36 @@ services:
     # NO ports published — reachable only by the API container.
     restart: unless-stopped
 
+  # ── RAG orchestration API ─────────────────────────────────────────────
+  api:
+    build: ./api
+    container_name: privasearch-api
+    environment:
+      - SEARXNG_URL=http://searxng:8080   # internal DNS name, internal port
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - RESULT_COUNT=${RESULT_COUNT:-5}         # default # of sources for the AI answer
+      - MAX_SOURCES=${MAX_SOURCES:-20}          # hard cap the user can dial up to
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.2}
+      - CHAT_TEMPERATURE=${CHAT_TEMPERATURE:-0.6}  # plain-chat creativity
+      # When false, per-source "Summarize" uses the snippet only and makes NO
+      # external page fetch (keeps the zero-external-calls guarantee).
+      - ALLOW_PAGE_FETCH=${ALLOW_PAGE_FETCH:-true}
+      # Max page chars fed to the summarizer (bigger = better but slower on CPU).
+      - SUMMARY_MAX_CHARS=${SUMMARY_MAX_CHARS:-4500}
+      # How long Ollama keeps the model resident between requests.
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-30m}
+      # Exit-location widget: one cached geo-IP lookup. Set false to disable.
+      - SHOW_LOCATION=${SHOW_LOCATION:-true}
+      # How SEARCH traffic exits (labels the widget): direct | vpn | tor.
+      # Overridden by the vpn/tor compose overrides.
+      - EGRESS_MODE=${EGRESS_MODE:-direct}
+      - API_PORT=3000
+    depends_on: [searxng, ollama]
+    networks: [privanet]
+    # NO ports published — only nginx (frontend) proxies to it internally.
+    restart: unless-stopped
+
 networks:
   privanet:
     driver: bridge
