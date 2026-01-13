@@ -55,6 +55,16 @@ services:
     # NO ports published — only nginx (frontend) proxies to it internally.
     restart: unless-stopped
 
+  # ── Static frontend + reverse proxy (the ONLY exposed service) ────────
+  frontend:
+    build: ./frontend
+    container_name: privasearch-frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"   # <-- the single exposed port
+    depends_on: [api]
+    networks: [privanet]
+    restart: unless-stopped
+
 networks:
   privanet:
     driver: bridge
