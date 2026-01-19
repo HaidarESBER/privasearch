@@ -9,7 +9,6 @@
 name: privasearch
 
 services:
-
   # ── Metasearch backend ────────────────────────────────────────────────
   searxng:
     image: searxng/searxng:latest
@@ -24,6 +23,25 @@ services:
     networks: [privanet]
     # NO ports published — reachable only by the API container.
     restart: unless-stopped
+
+  # ── Local LLM ─────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: privasearch-ollama
+    volumes:
+      # Model weights persist here so you pull once and stay offline after.
+      - ollama-models:/root/.ollama
+    networks: [privanet]
+    # NO ports published — the LLM never listens on your host network.
+    restart: unless-stopped
+    # ── GPU (NVIDIA) — uncomment to accelerate inference ────────────────
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
   # ── RAG orchestration API ─────────────────────────────────────────────
   api:
@@ -68,3 +86,6 @@ services:
 networks:
   privanet:
     driver: bridge
+
+volumes:
+  ollama-models:
