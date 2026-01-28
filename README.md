@@ -51,3 +51,101 @@ flowchart LR
 
 ---
 
+## Quick start
+
+**Prerequisites:** Docker + Docker Compose, and Node.js (only for the one-time
+setup script). ~5 GB free disk for the default model.
+
+```bash
+# 1. One-time setup: creates .env and a random SearXNG secret_key
+npm run setup            # or: make setup
+
+# 2. Pull the LLM into Ollama (one-time; needs internet once)
+npm run pull-model       # or: make pull-model
+
+# 3. Start everything
+docker compose up -d     # or: npm run up  /  make up
+```
+
+Then open **http://localhost:8080**.
+
+> `npm run up` / `make up` also runs setup automatically, so the truly minimal
+> path is: `make pull-model` then `make up`.
+
+### Helper commands
+
+| npm | make | Does |
+|-----|------|------|
+| `npm run setup` | `make setup` | Generate `.env` + random `secret_key` |
+| `npm run pull-model` | `make pull-model` | Download the Ollama model |
+| `npm run up` | `make up` | Setup + build + start (detached) |
+| `npm run down` | `make down` | Stop and remove containers |
+| `npm run logs` | `make logs` | Tail all service logs |
+| `npm run ps` | `make ps` | Show service status |
+
+---
+
+## Configuration
+
+All knobs live in `.env` (copied from `.env.example`):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `FRONTEND_PORT` | `8080` | The **only** exposed host port |
+| `OLLAMA_MODEL` | `llama3.1:8b` | Which local model answers |
+| `LLM_TEMPERATURE` | `0.2` | Lower = more factual (good for RAG) |
+| `RESULT_COUNT` | `5` | How many results feed the prompt (N) |
+
+The SearXNG `secret_key` is **not** in `.env` — it's generated straight into
+`searxng/settings.yml` by the setup script so it never lands in an env file.
+
+### Swapping the LLM model
+
+```bash
+# 1. Pick any Ollama model tag, e.g. mistral, qwen2.5:7b, phi3, llama3.1:70b
+# 2. Pull it:
+docker compose exec ollama ollama pull mistral
+
+# 3. Point PrivaSearch at it in .env:
+#    OLLAMA_MODEL=mistral
+
+# 4. Recreate the API so it reads the new value:
+docker compose up -d api
+```
+
+Smaller models (e.g. `phi3`, `qwen2.5:3b`) run comfortably on CPU; larger ones
+benefit from a GPU (uncomment the `deploy:` block for `ollama` in
+`docker-compose.yml` for NVIDIA).
+
+### ⚡ Performance on CPU (no GPU)
+
+Without a GPU, `llama3.1:8b` is heavy: the **first** request loads ~5 GB into
+RAM (can take minutes if RAM is tight), then generates at ~10 tokens/sec. Two
+things help a lot:
+
+- **Use a smaller model.** `llama3.2:3b` or `qwen2.5:3b` load faster and roughly
+  double the speed:
+  ```bash
+  docker compose exec ollama ollama pull llama3.2:3b
+  # set OLLAMA_MODEL=llama3.2:3b in .env, then:
+  docker compose up -d api
+  ```
+- **Keep it warm.** The model is held in RAM for 30 min between requests
+  (`OLLAMA_KEEP_ALIVE`, configurable) so you only pay the load cost once.
+- If loads are extremely slow, raise Docker Desktop's memory limit (Settings →
+  Resources) to at least 8 GB so the model doesn't swap.
+
+### Pulling the model fully offline
+
+Ollama caches weights in the `ollama-models` Docker volume. To run on an
+air-gapped machine:
+
+1. On a machine **with** internet: `docker compose up -d ollama` then
+   `docker compose exec ollama ollama pull llama3.1:8b`.
+2. Copy the named volume across (e.g.
+   `docker run --rm -v privasearch_ollama-models:/data -v $PWD:/backup alpine tar czf /backup/models.tgz -C /data .`,
+   then restore the tarball into the volume on the target machine).
+3. From then on, **no internet is required** for inference.
+
+---
+
