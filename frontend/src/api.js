@@ -1,11 +1,63 @@
 // Client for the PrivaSearch API. SSE is read via fetch + ReadableStream so we
 // can POST bodies and abort in-flight requests.
 
+// ── Shared SSE reader ─────────────────────────────────────────────────────
+async function consumeSSE(res, handlers) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep;
+    while ((sep = buffer.indexOf('\n\n')) >= 0) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const evt = parseEvent(raw);
+      if (evt) handlers[evt.event]?.(evt.data);
+    }
+  }
+}
+
+function parseEvent(raw) {
+  let event = 'message';
+  let data = '';
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data += line.slice(5).trim();
+  }
+  if (!data) return { event, data: null };
+  try {
+    return { event, data: JSON.parse(data) };
+  } catch {
+    return { event, data: null };
+  }
+}
+
 // ── Health / config (default & max source counts, etc.) ───────────────────
 export async function fetchHealth(signal) {
   const res = await fetch('/api/health', { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+// ── RAG answer over a chosen set of sources ────────────────────────────────
+export async function streamAnswer(query, sources, { onToken, onError, onDone, signal }) {
+  const res = await fetch('/api/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ q: query, sources }),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  await consumeSSE(res, {
+    token: (d) => onToken?.(d?.text || ''),
+    error: (d) => onError?.(d || { message: 'Unknown error' }),
+    done: () => onDone?.(),
+  });
 }
 
 // ── Paginated raw results ─────────────────────────────────────────────────
