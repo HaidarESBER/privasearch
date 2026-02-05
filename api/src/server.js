@@ -4,7 +4,7 @@
 // they land.
 
 import express from 'express';
-import { searchPage } from './searxng.js';
+import { searchPage, SEARXNG_URL } from './searxng.js';
 import { streamChat, isUp } from './ollama.js';
 import { buildMessages } from './prompt.js';
 
@@ -13,6 +13,8 @@ const RESULT_COUNT = parseInt(process.env.RESULT_COUNT || '5', 10);
 const MAX_SOURCES = parseInt(process.env.MAX_SOURCES || '20', 10);
 const TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE || '0.2');
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
+const UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) PrivaSearch/1.0';
 
 const app = express();
 app.use(express.json({ limit: '16kb' }));
@@ -60,6 +62,45 @@ app.get('/api/results', async (req, res) => {
     res.json({ page, results, total, hasMore: results.length > 0 });
   } catch (err) {
     res.status(502).json({ error: `Search failed: ${err.message}` });
+  }
+});
+
+// ── Image proxy ──────────────────────────────────────────────────────────
+// Serves result thumbnails so the browser NEVER contacts the remote image
+// host directly (that would leak your IP). Two paths:
+//   • SearXNG-signed  (?…&h=…)  → forwarded to SearXNG's own image_proxy,
+//     which fetches the image through its egress (Tor/VPN-aware).
+//   • plain ?url=<abs>          → fetched by this API (API egress) as a fallback
+//     for engines that hand back an absolute thumbnail.
+app.get('/api/image_proxy', async (req, res) => {
+  const qs = req.originalUrl.split('?')[1] || '';
+  const params = new URLSearchParams(qs);
+  const signed = params.has('h');
+  const target = signed ? `${SEARXNG_URL}/image_proxy?${qs}` : params.get('url');
+
+  if (!signed && !/^https?:\/\//i.test(target || '')) {
+    res.status(400).end();
+    return;
+  }
+  try {
+    const r = await fetch(target, {
+      signal: AbortSignal.timeout(10_000),
+      headers: { 'User-Agent': UA, Accept: 'image/*' },
+    });
+    if (!r.ok) {
+      res.status(r.status).end();
+      return;
+    }
+    const ct = r.headers.get('content-type') || '';
+    if (!signed && !/^image\//i.test(ct)) {
+      res.status(415).end(); // refuse to proxy non-images from arbitrary URLs
+      return;
+    }
+    res.setHeader('Content-Type', ct || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(Buffer.from(await r.arrayBuffer()));
+  } catch {
+    res.status(502).end();
   }
 });
 
