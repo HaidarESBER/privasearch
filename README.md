@@ -149,3 +149,21 @@ air-gapped machine:
 
 ---
 
+## Categories & filters
+
+Under the search bar you get SearXNG's full category set — **All, Images,
+Videos, News, Science, Music, IT, Files, Map** — plus three filters: **time
+range** (day/week/month/year), **SafeSearch** (off/moderate/strict), and
+**language**. Images render as a grid, videos as cards with thumbnails; text
+categories also get the streamed AI answer with citations. Changing any
+category or filter re-runs the search immediately, and results are paginated.
+
+**Image privacy:** result thumbnails never load from the remote host directly —
+that would leak your browser's IP, referrer and fingerprint. Every image is
+routed through `/api/image_proxy`, so your **browser only ever talks to your own
+server**. SearXNG-signed thumbnails are fetched through SearXNG's egress (so
+they respect Tor/VPN); other thumbnails are fetched server-side by the API. The
+API refuses to proxy anything that isn't an image.
+
+---
+
