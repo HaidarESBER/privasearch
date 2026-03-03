@@ -46,3 +46,23 @@ export function buildMessages(query, sources) {
     { role: 'user', content: user },
   ];
 }
+
+/**
+ * Messages for summarizing a SINGLE source (page text or snippet).
+ * @param {{title:string,url:string,text:string}} src
+ */
+export function buildSummaryMessages({ title, url, text }) {
+  const system = [
+    'You summarize a single web page for the reader.',
+    'Give a concise summary (3–5 sentences) of the main points, in plain language.',
+    'Use ONLY the provided content. Do not add outside knowledge or invent details.',
+    'If the content is empty, truncated, paywalled, or unreadable, say so briefly instead of guessing.',
+  ].join(' ');
+
+  const user = `Title: ${title}\nURL: ${url}\n\nContent:\n${text}`;
+
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
