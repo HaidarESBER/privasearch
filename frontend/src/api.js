@@ -75,3 +75,21 @@ export async function fetchResults(query, page, filters, signal) {
   return res.json(); // { page, results, hasMore }
 }
 
+// ── Summarize a single source ─────────────────────────────────────────────
+export async function summarizeSource({ url, title, snippet }, { onMeta, onToken, onNotice, onError, onDone, signal }) {
+  const res = await fetch('/api/summarize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, title, snippet }),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  await consumeSSE(res, {
+    meta: (d) => onMeta?.(d || {}),
+    token: (d) => onToken?.(d?.text || ''),
+    notice: (d) => onNotice?.(d?.message || ''),
+    error: (d) => onError?.(d || { message: 'Unknown error' }),
+    done: () => onDone?.(),
+  });
+}
+
