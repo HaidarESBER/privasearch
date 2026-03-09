@@ -6,13 +6,15 @@
 import express from 'express';
 import { searchPage, SEARXNG_URL } from './searxng.js';
 import { streamChat, isUp } from './ollama.js';
-import { buildMessages } from './prompt.js';
+import { buildMessages, buildSummaryMessages } from './prompt.js';
+import { fetchReadable } from './fetchPage.js';
 
 const MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
 const RESULT_COUNT = parseInt(process.env.RESULT_COUNT || '5', 10);
 const MAX_SOURCES = parseInt(process.env.MAX_SOURCES || '20', 10);
 const TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE || '0.2');
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
+const ALLOW_PAGE_FETCH = (process.env.ALLOW_PAGE_FETCH || 'true').toLowerCase() !== 'false';
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) PrivaSearch/1.0';
 
@@ -44,7 +46,7 @@ function openSSE(res) {
 
 // ── Health ──────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
-  res.json({ ok: true, model: MODEL, resultCount: RESULT_COUNT, maxSources: MAX_SOURCES, llm: await isUp() });
+  res.json({ ok: true, model: MODEL, resultCount: RESULT_COUNT, maxSources: MAX_SOURCES, pageFetch: ALLOW_PAGE_FETCH, llm: await isUp() });
 });
 
 // ── Paginated raw results ────────────────────────────────────────────────
@@ -131,6 +133,68 @@ app.post('/api/answer', async (req, res) => {
 
   try {
     const messages = buildMessages(query, sources);
+    for await (const token of streamChat(messages, {
+      model: MODEL,
+      temperature: TEMPERATURE,
+      signal: ac.signal,
+    })) {
+      send('token', { text: token });
+    }
+  } catch (err) {
+    if (!ac.signal.aborted) {
+      send('error', { stage: 'llm', message: `LLM unavailable (${err.message}).` });
+    }
+  }
+
+  send('done', {});
+  res.end();
+});
+
+// ── Summarize a single source ────────────────────────────────────────────
+app.post('/api/summarize', async (req, res) => {
+  const url = String(req.body?.url || '').trim();
+  const title = String(req.body?.title || '').trim();
+  const snippet = String(req.body?.snippet || '').trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    res.status(400).json({ error: 'Invalid or missing url.' });
+    return;
+  }
+
+  const send = openSSE(res);
+  const ac = new AbortController();
+  // Abort upstream work only when the RESPONSE closes (client disconnect).
+  // NOTE: not req.on('close') — after express.json() reads the POST body the
+  // request stream is "complete" and would fire close immediately.
+  res.on('close', () => ac.abort());
+
+  // Prefer full page text; fall back to the snippet.
+  let text = '';
+  let source = 'snippet';
+  if (ALLOW_PAGE_FETCH) {
+    try {
+      text = await fetchReadable(url, { signal: ac.signal });
+      source = 'page';
+    } catch (err) {
+      if (ac.signal.aborted) return res.end();
+      send('notice', { message: `Couldn't fetch the page (${err.message}); summarizing the snippet instead.` });
+    }
+  }
+  if (!text || text.length < 40) {
+    text = snippet;
+    source = 'snippet';
+  }
+
+  if (!text) {
+    send('error', { stage: 'fetch', message: 'No readable text available to summarize.' });
+    send('done', {});
+    return res.end();
+  }
+
+  send('meta', { source }); // tells the UI whether this is a page or snippet summary
+
+  try {
+    const messages = buildSummaryMessages({ title, url, text });
     for await (const token of streamChat(messages, {
       model: MODEL,
       temperature: TEMPERATURE,
