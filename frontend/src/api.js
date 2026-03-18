@@ -60,6 +60,22 @@ export async function streamAnswer(query, sources, { onToken, onError, onDone, s
   });
 }
 
+// ── Plain chat with the local LLM ──────────────────────────────────────────
+export async function streamChatTurn(messages, { onToken, onError, onDone, signal }) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  await consumeSSE(res, {
+    token: (d) => onToken?.(d?.text || ''),
+    error: (d) => onError?.(d || { message: 'Unknown error' }),
+    done: () => onDone?.(),
+  });
+}
+
 // ── Paginated raw results ─────────────────────────────────────────────────
 export async function fetchResults(query, page, filters, signal) {
   const p = new URLSearchParams({ q: query, page: String(page) });
