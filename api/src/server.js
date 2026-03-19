@@ -13,8 +13,15 @@ const MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
 const RESULT_COUNT = parseInt(process.env.RESULT_COUNT || '5', 10);
 const MAX_SOURCES = parseInt(process.env.MAX_SOURCES || '20', 10);
 const TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE || '0.2');
+const CHAT_TEMPERATURE = parseFloat(process.env.CHAT_TEMPERATURE || '0.6');
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
 const ALLOW_PAGE_FETCH = (process.env.ALLOW_PAGE_FETCH || 'true').toLowerCase() !== 'false';
+
+const CHAT_SYSTEM =
+  "You are PrivaSearch Assistant, a helpful AI running entirely on the user's own machine — " +
+  'nothing they say leaves their computer. Be concise, accurate and friendly. Use plain ' +
+  'language. If you are unsure or lack the information, say so rather than guessing.';
+
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) PrivaSearch/1.0';
 
@@ -143,6 +150,41 @@ app.post('/api/answer', async (req, res) => {
   } catch (err) {
     if (!ac.signal.aborted) {
       send('error', { stage: 'llm', message: `LLM unavailable (${err.message}).` });
+    }
+  }
+
+  send('done', {});
+  res.end();
+});
+
+// ── Plain chat with the local LLM (no search, no RAG) ────────────────────
+app.post('/api/chat', async (req, res) => {
+  let messages = (Array.isArray(req.body?.messages) ? req.body.messages : [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .slice(-20) // cap conversation history
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+
+  if (messages.length === 0) {
+    res.status(400).json({ error: 'No messages.' });
+    return;
+  }
+  messages = [{ role: 'system', content: CHAT_SYSTEM }, ...messages];
+
+  const send = openSSE(res);
+  const ac = new AbortController();
+  res.on('close', () => ac.abort());
+
+  try {
+    for await (const token of streamChat(messages, {
+      model: MODEL,
+      temperature: CHAT_TEMPERATURE,
+      signal: ac.signal,
+    })) {
+      send('token', { text: token });
+    }
+  } catch (err) {
+    if (!ac.signal.aborted) {
+      send('error', { message: `LLM unavailable (${err.message}).` });
     }
   }
 
