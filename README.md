@@ -167,3 +167,80 @@ API refuses to proxy anything that isn't an image.
 
 ---
 
+## 🛡️ Built-in VPN (optional)
+
+For an extra layer, PrivaSearch can route **SearXNG's outbound traffic through a
+VPN** so upstream search engines see the VPN's IP, never yours. It uses
+[Gluetun](https://github.com/qdm12/gluetun), which supports 50+ providers plus
+custom WireGuard. SearXNG runs *inside* the VPN's network namespace, and
+Gluetun's **kill switch is on by default** — if the tunnel drops, SearXNG loses
+all internet, so queries **fail closed** instead of leaking on your real IP.
+
+> Ollama, the API and the frontend never make external calls, so only SearXNG
+> needs tunnelling. The VPN is opt-in (it needs your credentials) but fully
+> integrated — one command turns it on.
+
+### Enable it
+
+1. Fill in the **VPN block** of your `.env` for your provider (examples for
+   custom WireGuard, Mullvad, Proton, and OpenVPN providers are all in
+   `.env.example`). For a custom WireGuard `.conf`, copy the key/address/endpoint
+   values across.
+
+2. Start the stack with the VPN override:
+
+   ```bash
+   make up-vpn        # or: npm run up-vpn
+   # equivalently:
+   docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d --build
+   ```
+
+3. **Verify** the tunnel is actually carrying SearXNG's traffic:
+
+   ```bash
+   make vpn-ip        # or: npm run vpn-ip
+   # prints the public IP SearXNG exits from — it should be the VPN's, not yours
+   ```
+
+Stop it with `make down-vpn`. Run plain `make up` any time to go back to the
+no-VPN stack.
+
+### Provider quick-reference
+
+| Provider | Set in `.env` |
+|----------|---------------|
+| Custom / self-hosted WireGuard | `VPN_SERVICE_PROVIDER=custom` + the 5 `WIREGUARD_*` values |
+| Mullvad | `VPN_SERVICE_PROVIDER=mullvad`, `WIREGUARD_PRIVATE_KEY`, `WIREGUARD_ADDRESSES` |
+| Proton VPN | `VPN_SERVICE_PROVIDER=protonvpn`, `WIREGUARD_PRIVATE_KEY` |
+| NordVPN / PIA / Surfshark | `VPN_SERVICE_PROVIDER=<name>`, `VPN_TYPE=openvpn`, `OPENVPN_USER/PASSWORD` |
+
+> **Fail-open instead?** Not recommended, but if you'd rather search keep working
+> when the VPN is down, add `FIREWALL=off` to the `gluetun` service. This
+> disables the kill switch and can expose your real IP — leave it on unless you
+> have a specific reason.
+
+### Free option: Tor (no account, zero setup)
+
+Don't have a VPN subscription? Route SearXNG through **Tor** instead. It's free,
+needs **no account and no credentials**, and drops in with one command — the Tor
+container requires zero configuration. It hides your IP from the upstream engines
+just like a VPN, using SearXNG's native SOCKS proxy support (with `socks5h://`,
+so DNS is resolved through Tor too — no DNS leak).
+
+```bash
+make up-tor         # or: npm run up-tor
+make tor-ip         # verify: prints the Tor exit IP (not yours)
+```
+
+Stop with `make down-tor`. **Trade-offs:** Tor is slower (3 relay hops), and some
+engines block or CAPTCHA Tor exit nodes — SearXNG simply skips those, so you may
+get fewer results from certain engines. For most privacy-first searching that's a
+fair trade for a free, trust-no-provider option.
+
+> **VPN vs Tor at a glance:** a VPN is faster and less likely to be blocked, but
+> costs money and means trusting one provider. Tor is free and trusts no single
+> party, but is slower and sometimes blocked. Pick whichever fits — `make up-vpn`
+> or `make up-tor`. (Running plain `make up` uses neither.)
+
+---
+
