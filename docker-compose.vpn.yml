@@ -1,0 +1,70 @@
+# ── Optional VPN layer ────────────────────────────────────────────────
+# Routes SearXNG's OUTBOUND traffic through a VPN tunnel so upstream search
+# engines see the VPN's IP, never yours. SearXNG runs inside Gluetun's network
+# namespace, and Gluetun's kill switch (on by default) means if the tunnel
+# drops, SearXNG has NO internet — queries fail closed instead of leaking.
+#
+# Enable with:
+#   docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d --build
+#   (or: make up-vpn / npm run up-vpn)
+#
+# Ollama, the API and the frontend are unchanged — they never make external
+# calls, so there is nothing to tunnel there.
+
+services:
+  # VPN client. Provider-agnostic: set the details in .env (see the VPN
+  # section of .env.example).
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: privasearch-gluetun
+    cap_add:
+      - NET_ADMIN                       # required to create the tunnel interface
+    devices:
+      - /dev/net/tun:/dev/net/tun       # WireGuard/OpenVPN TUN device
+    environment:
+      # ── Provider selection ──────────────────────────────────────────
+      # "custom" = supply your own WireGuard config below. Or set a named
+      # provider: mullvad | protonvpn | nordvpn | privado | pia | surfshark ...
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-custom}
+      - VPN_TYPE=${VPN_TYPE:-wireguard}
+
+      # ── WireGuard (primary path — used by custom, Mullvad, Proton, …) ─
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY:-}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES:-}
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY:-}        # custom only
+      - WIREGUARD_ENDPOINT_IP=${WIREGUARD_ENDPOINT_IP:-}      # custom only
+      - WIREGUARD_ENDPOINT_PORT=${WIREGUARD_ENDPOINT_PORT:-51820}
+
+      # ── OpenVPN creds (only for providers that need them) ────────────
+      - OPENVPN_USER=${OPENVPN_USER:-}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD:-}
+
+      # ── Server location (optional, provider-dependent) ───────────────
+      - SERVER_COUNTRIES=${VPN_SERVER_COUNTRIES:-}
+      - SERVER_CITIES=${VPN_SERVER_CITIES:-}
+
+      # ── Firewall / kill switch ───────────────────────────────────────
+      # Kill switch is ON by default. Allow the API container (on the docker
+      # network) to reach SearXNG on :8080 through this namespace.
+      - FIREWALL_INPUT_PORTS=8080
+      # Permit traffic to/from the internal docker subnets ONLY (so the API
+      # can talk to SearXNG). Public traffic still goes through the tunnel.
+      - FIREWALL_OUTBOUND_SUBNETS=${VPN_LAN_SUBNETS:-172.16.0.0/12}
+    networks: [privanet]
+    restart: unless-stopped
+
+  searxng:
+    # Move SearXNG entirely inside the VPN namespace. `!reset` clears the base
+    # file's `networks:` so it doesn't conflict with network_mode.
+    network_mode: "service:gluetun"
+    networks: !reset null
+    depends_on:
+      - gluetun
+
+  api:
+    environment:
+      # SearXNG now lives in Gluetun's namespace, so reach it via `gluetun`.
+      - SEARXNG_URL=http://gluetun:8080
+      - EGRESS_MODE=vpn
+    depends_on:
+      - gluetun
