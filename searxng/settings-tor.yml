@@ -1,0 +1,50 @@
+# SearXNG configuration — Tor variant.
+# Identical privacy hardening to settings.yml, PLUS all upstream engine
+# requests are routed through the Tor network via a local Tor SOCKS proxy.
+# This file is mounted over settings.yml only when you start with the Tor
+# override (make up-tor / npm run up-tor).
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "PrivaSearch"
+  enable_metrics: false
+  contact_url: false
+
+server:
+  # Filled in by `make setup` / `npm run setup` (same generator as settings.yml).
+  secret_key: "7615d55bcf419aef7494ef4526c897bc46fb60b4aab9080c0b5907de6ddffdcc"
+  base_url: false
+  limiter: false
+  public_instance: false
+  image_proxy: true
+  method: "GET"
+
+search:
+  formats:
+    - html
+    - json
+  safe_search: 1
+  autocomplete: ""
+  default_lang: "auto"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  theme_args:
+    simple_style: dark
+
+outgoing:
+  # Tor adds latency (3 relay hops) — give upstream requests more headroom.
+  request_timeout: 15.0
+  max_request_timeout: 30.0
+  pool_connections: 100
+  pool_maxsize: 20
+  # Route ALL outbound engine traffic through the Tor SOCKS proxy container.
+  # socks5h:// => DNS is resolved through Tor too, so there is NO DNS leak.
+  using_tor_proxy: true
+  proxies:
+    "all://":
+      - socks5h://tor:9050
