@@ -1,20 +1,30 @@
 // PrivaSearch orchestration API.
 //
-// Streaming endpoints use Server-Sent Events so the browser renders tokens as
-// they land.
+// Endpoints:
+//   GET  /api/results    Paginated raw SearXNG results (JSON) for the list/UI
+//   POST /api/answer     Stream a RAG answer over a caller-provided set of
+//                        sources (lets the UI pick HOW MANY sources to use)
+//   POST /api/chat       Stream a plain multi-turn chat with the local LLM
+//   POST /api/summarize  Stream an AI summary of ONE source (page text or snippet)
+//   GET  /api/health     Liveness + config
+//
+// Streaming uses Server-Sent Events so the browser renders tokens as they land.
 
 import express from 'express';
 import { searchPage, SEARXNG_URL } from './searxng.js';
 import { streamChat, isUp } from './ollama.js';
 import { buildMessages, buildSummaryMessages } from './prompt.js';
 import { fetchReadable } from './fetchPage.js';
+import { getExitLocation } from './geo.js';
 
 const MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
-const RESULT_COUNT = parseInt(process.env.RESULT_COUNT || '5', 10);
-const MAX_SOURCES = parseInt(process.env.MAX_SOURCES || '20', 10);
+const RESULT_COUNT = parseInt(process.env.RESULT_COUNT || '5', 10); // default N
+const MAX_SOURCES = parseInt(process.env.MAX_SOURCES || '20', 10); // hard cap for N
 const TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE || '0.2');
 const CHAT_TEMPERATURE = parseFloat(process.env.CHAT_TEMPERATURE || '0.6');
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
+// When false, "Summarize" never fetches the page — it uses the snippet only,
+// preserving the zero-external-calls guarantee.
 const ALLOW_PAGE_FETCH = (process.env.ALLOW_PAGE_FETCH || 'true').toLowerCase() !== 'false';
 
 const CHAT_SYSTEM =
@@ -53,7 +63,25 @@ function openSSE(res) {
 
 // ── Health ──────────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
-  res.json({ ok: true, model: MODEL, resultCount: RESULT_COUNT, maxSources: MAX_SOURCES, pageFetch: ALLOW_PAGE_FETCH, llm: await isUp() });
+  res.json({
+    ok: true,
+    model: MODEL,
+    resultCount: RESULT_COUNT,
+    maxSources: MAX_SOURCES,
+    pageFetch: ALLOW_PAGE_FETCH,
+    llm: await isUp(),
+  });
+});
+
+// ── Exit location / privacy posture ──────────────────────────────────────
+app.get('/api/privacy', async (_req, res) => {
+  try {
+    const loc = await getExitLocation({ signal: AbortSignal.timeout(6000) });
+    res.json(loc);
+  } catch (err) {
+    // Never fail the UI over a geo lookup — just report the mode.
+    res.json({ enabled: true, mode: process.env.EGRESS_MODE || 'direct', error: err.message });
+  }
 });
 
 // ── Paginated raw results ────────────────────────────────────────────────
@@ -255,5 +283,7 @@ app.post('/api/summarize', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`privasearch-api on :${PORT} (model=${MODEL}, N=${RESULT_COUNT})`);
+  console.log(
+    `privasearch-api on :${PORT} (model=${MODEL}, N=${RESULT_COUNT}, pageFetch=${ALLOW_PAGE_FETCH})`,
+  );
 });
