@@ -76,6 +76,13 @@ export async function streamChatTurn(messages, { onToken, onError, onDone, signa
   });
 }
 
+// ── Exit location / privacy posture ───────────────────────────────────────
+export async function fetchPrivacy(signal) {
+  const res = await fetch('/api/privacy', { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 // ── Paginated raw results ─────────────────────────────────────────────────
 export async function fetchResults(query, page, filters, signal) {
   const p = new URLSearchParams({ q: query, page: String(page) });
@@ -108,4 +115,3 @@ export async function summarizeSource({ url, title, snippet }, { onMeta, onToken
     done: () => onDone?.(),
   });
 }
-

@@ -1,0 +1,30 @@
+# ── Free, zero-setup anonymity layer (Tor) ────────────────────────────
+# Routes SearXNG's outbound engine traffic through the Tor network. No
+# account, no credentials, no config — the Tor container just works.
+#
+# Enable with:
+#   docker compose -f docker-compose.yml -f docker-compose.tor.yml up -d --build
+#   (or: make up-tor / npm run up-tor)
+#
+# Trade-off vs a VPN: slower, and some engines block Tor exit nodes (SearXNG
+# just skips those). See the README "Free option: Tor" section.
+
+services:
+  # Tor SOCKS proxy. Listens on 0.0.0.0:9050 for other containers on privanet.
+  tor:
+    image: osminogin/tor-simple:latest
+    container_name: privasearch-tor
+    networks: [privanet]
+    restart: unless-stopped
+
+  api:
+    environment:
+      - EGRESS_MODE=tor
+
+  searxng:
+    # Mount the Tor-enabled settings over the default one. This file mount is
+    # more specific than the base dir mount, so it shadows settings.yml.
+    volumes:
+      - ./searxng/settings-tor.yml:/etc/searxng/settings.yml:ro
+    depends_on:
+      - tor
