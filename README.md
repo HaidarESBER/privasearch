@@ -244,3 +244,87 @@ fair trade for a free, trust-no-provider option.
 
 ---
 
+## 🔐 Privacy statement — what touches disk, what stays in memory
+
+PrivaSearch is designed so that **no user query, search result, or generated
+answer is ever sent to a third party** (the sole exception being SearXNG's own
+queries to upstream search engines — the fundamental job of a metasearch engine).
+
+**Network guarantees**
+
+- The **only** externally-reachable service is the frontend on `FRONTEND_PORT`.
+  SearXNG, Ollama, and the API have **no published ports** — they are reachable
+  only over the internal Docker network.
+- The **only** routine outbound internet traffic is SearXNG contacting upstream
+  search engines. The LLM, the API, and the UI make **zero external calls**. With
+  the optional [built-in VPN](#️-built-in-vpn-optional) or [Tor](#free-option-tor-no-account-zero-setup)
+  enabled, even that traffic exits through a tunnel, hiding your IP from the
+  upstream engines too.
+- **One exception, opt-in and explicit:** clicking "✨ Summarize" on a result
+  fetches *that one page* directly (the same request your browser makes when you
+  click the link) so the LLM can summarize it. This only happens on your click,
+  never automatically. Set `ALLOW_PAGE_FETCH=false` to disable it entirely —
+  summaries then use the SearXNG snippet only, and nothing is fetched.
+- The UI loads **no external fonts, scripts, or stylesheets** (system font
+  stack, local module scripts only) and sends **no referrers**.
+- No analytics, telemetry, or crash-reporting of any kind.
+
+**What touches disk**
+
+| Data | Where | Persisted? |
+|------|-------|-----------|
+| Your query | API + SearXNG process memory | **No** — never written to disk |
+| Search results | API process memory | **No** — held only for the request |
+| Generated answer | Streamed through the API to your browser | **No** — not stored server-side |
+| LLM model weights | `ollama-models` Docker volume | **Yes** — the model files only |
+| SearXNG config + secret | `searxng/settings.yml` | **Yes** — config only, no queries |
+
+**SearXNG hardening** (see comments in `searxng/settings.yml`): query logging
+is off (SearXNG doesn't log queries by default; debug and metrics are disabled
+and no Redis/Valkey is attached, so nothing about a search is persisted),
+`safe_search` is on, public-instance features are disabled, autocomplete is off
+(no per-keystroke leakage), remote images are proxied, and a unique random
+`secret_key` is generated per install.
+
+---
+
+## Graceful degradation
+
+- **LLM down / model not pulled?** The raw SearXNG results still render, with a
+  clear notice that the AI answer is unavailable.
+- **No results?** You get an explicit "no results" message instead of a
+  hallucinated answer.
+- **Prompt discipline:** the model is instructed to answer **only** from the
+  provided results, cite every claim by index, and say *"Insufficient
+  information in the results."* rather than make things up.
+
+---
+
+## Project layout
+
+```
+.
+├── docker-compose.yml        # wires all four services; only frontend is exposed
+├── .env.example              # all configurable values
+├── Makefile / package.json   # up / down / logs / pull-model helpers
+├── scripts/gen-secret.mjs    # cross-platform secret + .env generator
+├── searxng/settings.yml      # privacy-hardened SearXNG config (JSON API on)
+├── api/                      # Node + Express RAG orchestration (SSE streaming)
+│   └── src/{server,searxng,ollama,prompt}.js
+└── frontend/                 # React + Vite UI, served by nginx (also /api proxy)
+    └── src/{App,api}.jsx, components/
+```
+
+---
+
+## Local development (without full Docker rebuilds)
+
+```bash
+# Terminal 1 — API (needs SearXNG + Ollama reachable; easiest: keep them in Docker)
+cd api && npm install
+SEARXNG_URL=http://localhost:8080 OLLAMA_URL=http://localhost:11434 npm start
+# (temporarily publish those ports in a compose override for dev only)
+
+# Terminal 2 — Vite dev server with hot reload (proxies /api to :3000)
+cd frontend && npm install && npm run dev
+```
