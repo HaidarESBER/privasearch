@@ -328,3 +328,12 @@ SEARXNG_URL=http://localhost:8080 OLLAMA_URL=http://localhost:11434 npm start
 # Terminal 2 — Vite dev server with hot reload (proxies /api to :3000)
 cd frontend && npm install && npm run dev
 ```
+
+
+---
+
+## 👤 Author
+
+**Built by [Haidar Esber](https://haidaresber.github.io)** — Lebanese software & web developer based in France.
+
+[Portfolio](https://haidaresber.github.io) · [GitHub](https://github.com/HaidarESBER) · [LinkedIn](https://www.linkedin.com/in/haidaresber)
