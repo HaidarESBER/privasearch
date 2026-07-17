@@ -12,7 +12,7 @@ general:
 server:
   # Random per-install secret. `make setup` / `npm run setup` replaces the
   # placeholder below with 32 bytes of crypto-random hex. NEVER ship a real one.
-  secret_key: "7d39e374c21ce57c5ae347b1ca7165bed53da08d923aba6efc490675ff69dade"
+  secret_key: "PLACEHOLDER_SECRET_KEY_RUN_SETUP"
   base_url: false
   # Rate limiter / bot-detection OFF: this instance is only reachable by our
   # own orchestration container, and the limiter would otherwise block the
