@@ -22,10 +22,17 @@ if (!existsSync(envPath)) {
   console.log('• .env already exists — leaving it unchanged');
 }
 
-// 2) SearXNG secret_key (in each settings file that still has the placeholder)
+// 2) SearXNG settings: create the real (git-ignored) file from its committed
+//    *.example template, then inject a random secret_key. The real files are
+//    never committed — only the templates are.
 for (const rel of settingsFiles) {
   const path = resolve(root, rel);
-  if (!existsSync(path)) continue;
+  const example = resolve(root, `${rel}.example`);
+  if (!existsSync(path)) {
+    if (!existsSync(example)) continue;
+    copyFileSync(example, path);
+    console.log(`✔ Created ${rel} from ${rel}.example`);
+  }
   let settings = readFileSync(path, 'utf8');
   if (settings.includes(PLACEHOLDER)) {
     const secret = randomBytes(32).toString('hex');

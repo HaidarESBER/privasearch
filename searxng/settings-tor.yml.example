@@ -13,7 +13,7 @@ general:
 
 server:
   # Filled in by `make setup` / `npm run setup` (same generator as settings.yml).
-  secret_key: "7615d55bcf419aef7494ef4526c897bc46fb60b4aab9080c0b5907de6ddffdcc"
+  secret_key: "PLACEHOLDER_SECRET_KEY_RUN_SETUP"
   base_url: false
   limiter: false
   public_instance: false
