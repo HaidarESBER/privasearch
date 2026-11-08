@@ -309,6 +309,10 @@ SEARXNG_URL=http://localhost:8080 OLLAMA_URL=http://localhost:11434 npm start
 cd frontend && npm install && npm run dev
 ```
 
+## 📝 Write-up
+
+- [PrivaSearch: private AI search with SearXNG and a local LLM](https://dev.to/haidaresber/privasearch-private-ai-search-with-searxng-and-a-local-llm-5hk0)
+
 ---
 
 ## 👤 Author
