@@ -1,4 +1,16 @@
-# 🔒 PrivaSearch
+<div align="center">
+
+# PrivaSearch
+
+**Privacy-first AI search you run yourself: SearXNG + a local LLM, cited answers, nothing leaves your machine.**
+
+[![CI](https://github.com/HaidarESBER/privasearch/actions/workflows/ci.yml/badge.svg)](https://github.com/HaidarESBER/privasearch/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Node.js](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)
+![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+![React](https://img.shields.io/badge/frontend-React-61DAFB?logo=react&logoColor=black)
+
+</div>
 
 A **privacy-first AI search engine** you run yourself. It pairs
 [SearXNG](https://docs.searxng.org/) (a metasearch engine that strips trackers)
@@ -37,23 +49,9 @@ self‑hosted and offline‑capable once the model is pulled.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    User([👤 Browser]) -->|"only exposed port :8080"| FE
+![PrivaSearch architecture](docs/architecture.svg)
 
-    subgraph docker["Docker internal network (privanet) — nothing else is exposed"]
-        FE["🖥️ frontend<br/>nginx + React<br/>serves UI, proxies /api"]
-        API["⚙️ api<br/>Node + Express<br/>orchestration, SSE"]
-        SX["🔎 searxng<br/>metasearch, JSON API"]
-        OL["🧠 ollama<br/>local LLM (qwen2.5:1.5b)"]
-
-        FE -->|"/api/* (SSE + JSON)"| API
-        API -->|"1 · paginated results"| SX
-        API -->|"2 · RAG answer / chat (stream)"| OL
-    end
-
-    SX -.->|"the ONLY routine outbound traffic:<br/>upstream engine queries"| Web((🌐 Search engines))
-```
+![PrivaSearch search flow](docs/search-flow.svg)
 
 **Request flow (search):** the browser fetches results from `GET /api/results`
 (→ nginx → API → SearXNG JSON), then asks `POST /api/answer` to stream a RAG
@@ -309,13 +307,19 @@ SEARXNG_URL=http://localhost:8080 OLLAMA_URL=http://localhost:11434 npm start
 cd frontend && npm install && npm run dev
 ```
 
-## 📝 Write-up
+## Write-up
 
 - [PrivaSearch: private AI search with SearXNG and a local LLM](https://dev.to/haidaresber/privasearch-private-ai-search-with-searxng-and-a-local-llm-5hk0)
 
 ---
 
-## 👤 Author
+## License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+## Author
 
 **Built by [Haidar Esber](https://haidaresber.github.io)** — Lebanese software & web developer based in France.
 
